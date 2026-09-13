@@ -1,0 +1,53 @@
+name: Build APK
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build_apk:
+    name: Build APK (Buildozer / Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify buildozer.spec exists
+        run: |
+          if [ ! -f buildozer.spec ]; then
+            echo "ERROR: buildozer.spec not found in repository root." >&2
+            echo "Create a buildozer.spec (see https://buildozer.readthedocs.io/en/latest/usage.html#quick-start) and commit it, then re-run this workflow." >&2
+            exit 1
+          fi
+
+      - name: Run Buildozer inside Docker (build debug APK)
+        env:
+          ANDROID_SDK_ROOT: /opt/android/sdk
+        run: |
+          echo "Starting Buildozer inside Docker. This may take a long time the first run (it downloads Android SDK/NDK)."
+          docker run --rm \
+            -v "${{ github.workspace }}":/home/user/hostcwd \
+            -w /home/user/hostcwd \
+            --env ANDROID_SDK_ROOT=/opt/android/sdk \
+            kivy/buildozer:latest \
+            /bin/bash -lc "pip install --upgrade pip setuptools wheel && buildozer -v android debug"
+
+      - name: Upload generated APK(s)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-artifacts
+          path: |
+            bin/*.apk
+            bin/*.aab
+
+      - name: Show bin folder contents (for debugging)
+        if: always()
+        run: |
+          echo "Contents of bin/ (if present):"
+          ls -la bin || true
